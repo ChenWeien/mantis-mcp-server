@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "mantis": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "C:\\Users\\LukeYu\\plugins\\mantis-mcp-server\\dist\\index.js"
+      ],
+      "env": {
+        "NODE_ENV": "production",
+        "LOG_LEVEL": "info",
+        "CACHE_ENABLED": "true",
+        "CACHE_TTL_SECONDS": "300",
+        "ENABLE_FILE_LOGGING": "false"
+      }
+    }
+  }
+}

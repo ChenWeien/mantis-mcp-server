@@ -1,0 +1,42 @@
+{
+  "name": "mantis-mcp-server",
+  "version": "0.4.8",
+  "description": "Use Mantis Bug Tracker from Codex through MCP tools.",
+  "author": {
+    "name": "kevin.lin",
+    "email": "support@example.com",
+    "url": "https://github.com/kfnzero"
+  },
+  "homepage": "https://github.com/kfnzero/mantis-mcp-server",
+  "repository": "https://github.com/kfnzero/mantis-mcp-server",
+  "license": "MIT",
+  "keywords": [
+    "mantis",
+    "mantisbt",
+    "mcp",
+    "bug-tracker",
+    "issues"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Mantis",
+    "shortDescription": "Query and update Mantis issues from Codex",
+    "longDescription": "Connect Codex to Mantis Bug Tracker through MCP tools for listing issues, reading issue details, creating and updating issues, adding notes, and checking project or assignment statistics.",
+    "developerName": "kevin.lin",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/kfnzero/mantis-mcp-server",
+    "privacyPolicyURL": "https://github.com/kfnzero/mantis-mcp-server",
+    "termsOfServiceURL": "https://github.com/kfnzero/mantis-mcp-server",
+    "defaultPrompt": [
+      "List open Mantis issues and summarize what needs attention.",
+      "Create a Mantis issue for this bug report.",
+      "Show Mantis assignment statistics for the project."
+    ],
+    "brandColor": "#2E7D32",
+    "screenshots": []
+  }
+}

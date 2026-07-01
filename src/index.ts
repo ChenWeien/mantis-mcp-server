@@ -1,33 +1,34 @@
 #!/usr/bin/env node
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { config, isMantisConfigured } from "./config/index.js";
 import { createServer } from "./server.js";
 import { log } from "./utils/logger.js";
 
 async function main() {
-  // 輸出環境配置
-  log.info("=== Mantis MCP Server 配置資訊 ===", {
-    api_url: config.MANTIS_API_URL,
-    api_configured: isMantisConfigured(),
+  log.info("Starting Mantis MCP Server", {
+    apiUrl: config.MANTIS_API_URL,
+    apiConfigured: isMantisConfigured(),
     environment: config.NODE_ENV,
-    log_level: config.LOG_LEVEL,
-    cache_enabled: config.CACHE_ENABLED,
-    cache_ttl: config.CACHE_TTL_SECONDS,
-    file_logging: config.ENABLE_FILE_LOGGING ? `啟用 (${config.LOG_DIR})` : '停用'
+    logLevel: config.LOG_LEVEL,
+    cacheEnabled: config.CACHE_ENABLED,
+    cacheTtlSeconds: config.CACHE_TTL_SECONDS,
+    fileLogging: config.ENABLE_FILE_LOGGING,
   });
 
   if (!isMantisConfigured()) {
-    log.warn("Mantis API 未完整配置,部分功能可能無法使用");
+    log.warn("Mantis API key is missing. Set MANTIS_API_KEY before using Mantis tools.");
   }
 
-  const server: McpServer = createServer();
+  const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log.info("Mantis MCP Server 已在 stdio 上啟動");
+  log.info("Mantis MCP Server connected over stdio.");
 }
 
 main().catch((error) => {
-  log.error("主程序發生致命錯誤", { error: error.message, stack: error.stack });
+  log.error("Mantis MCP Server failed to start.", {
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+  });
   process.exit(1);
 });

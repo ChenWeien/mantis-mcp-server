@@ -1,39 +1,32 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { gzip } from "zlib";
+import { promisify } from "util";
 import { z } from "zod";
 import { isMantisConfigured } from "./config/index.js";
 import mantisApi, { MantisApiError, User } from "./services/mantisApi.js";
 import { log } from "./utils/logger.js";
-import { gzip } from 'zlib';
-import { promisify } from 'util';
 
 const gzipAsync = promisify(gzip);
+const COMPRESSION_THRESHOLD = 1024 * 100;
 
-// 定義壓縮閾值（單位：字節）
-const COMPRESSION_THRESHOLD = 1024 * 100; // 100KB
-
-// 定義日誌數據類型
 interface LogData {
   tool: string;
-  [key: string]: any;
-  error?: any;
+  [key: string]: unknown;
 }
 
-// 高階函數：檢查 Mantis 配置並執行工具邏輯
-async function withMantisConfigured<T>(
-  toolName: string,
-  action: () => Promise<T>
-): Promise<{
-  [x: string]: unknown;
+type ToolResponse = {
   content: Array<{
-    [x: string]: unknown;
     type: "text";
     text: string;
   }>;
-  _meta?: { [key: string]: unknown } | undefined;
-  isError?: boolean | undefined;
-}> {
+  isError?: boolean;
+};
+
+async function withMantisConfigured<T>(
+  toolName: string,
+  action: () => Promise<T>
+): Promise<ToolResponse> {
   try {
-    // 檢查是否已配置 Mantis API
     if (!isMantisConfigured()) {
       return {
         content: [
@@ -41,35 +34,33 @@ async function withMantisConfigured<T>(
             type: "text",
             text: JSON.stringify(
               {
-                error: "Mantis API 尚未配置",
-                message: "請在環境變數中設定 MANTIS_API_URL 和 MANTIS_API_KEY"
+                error: "Mantis API is not configured.",
+                message: "Set MANTIS_API_URL and MANTIS_API_KEY before using this tool.",
               },
               null,
               2
             ),
           },
         ],
-        isError: true
+        isError: true,
       };
     }
 
-    // 執行工具邏輯
     const result = await action();
     return {
       content: [
         {
           type: "text",
-          text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+          text: typeof result === "string" ? result : JSON.stringify(result, null, 2),
         },
       ],
     };
   } catch (error) {
-    // 處理錯誤情況
-    let errorMessage = `執行 ${toolName} 時發生錯誤`;
+    let errorMessage = `Tool ${toolName} failed.`;
     let logData: LogData = { tool: toolName };
 
     if (error instanceof MantisApiError) {
-      errorMessage = `Mantis API 錯誤: ${error.message}`;
+      errorMessage = `Mantis API error: ${error.message}`;
       if (error.statusCode) {
         errorMessage += ` (HTTP ${error.statusCode})`;
         logData = { ...logData, statusCode: error.statusCode };
@@ -86,412 +77,330 @@ async function withMantisConfigured<T>(
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            {
-              error: errorMessage,
-            },
-            null,
-            2
-          ),
+          text: JSON.stringify({ error: errorMessage }, null, 2),
         },
       ],
-      isError: true
+      isError: true,
     };
   }
 }
 
-// 壓縮 JSON 數據
-async function compressJsonData(data: any): Promise<string> {
+async function compressLargeJson(data: unknown): Promise<string> {
   const jsonString = JSON.stringify(data);
   if (jsonString.length < COMPRESSION_THRESHOLD) {
     return jsonString;
   }
 
   const compressed = await gzipAsync(Buffer.from(jsonString));
-  return compressed.toString('base64');
+  const base64Data = compressed.toString("base64");
+
+  return JSON.stringify({
+    compressed: true,
+    encoding: "gzip+base64",
+    data: base64Data,
+    originalSize: jsonString.length,
+    compressedSize: base64Data.length,
+  });
 }
 
 export function createServer(): McpServer {
   const server = new McpServer({
-    name: "Mantis MCP Server",
-    version: "0.1.0",
+    name: "mantis-mcp-server",
+    version: "0.4.8",
   });
 
-  // 獲取問題列表
   server.tool(
     "get_issues",
-    "獲取 Mantis 問題列表，可根據多個條件進行過濾，建議查詢時select選擇id,summary,description就好，資訊過多可能導致程式異常",
+    "List Mantis issues with optional filters.",
     {
-      projectId: z.number().optional().describe("專案 ID"),
-      statusId: z.number().optional().describe("狀態 ID"),
-      handlerId: z.number().optional().describe("處理人 ID"),
-      reporterId: z.number().optional().describe("報告者 ID"),
-      search: z.string().optional().describe("搜尋關鍵字"),
-      pageSize: z.number().optional().default(20).describe("頁數大小"),
-      page: z.number().optional().default(0).describe("分頁起始位置，從1開始"),
-      select: z.array(z.string()).optional().describe("選擇要返回的欄位，例如：['id', 'summary', 'description']"),
+      projectId: z.number().optional().describe("Project ID."),
+      statusId: z.number().optional().describe("Status ID."),
+      handlerId: z.number().optional().describe("Assigned user ID."),
+      reporterId: z.number().optional().describe("Reporter user ID."),
+      search: z.string().optional().describe("Search text."),
+      pageSize: z.number().optional().default(20).describe("Number of issues per page."),
+      page: z.number().optional().default(1).describe("Page number, starting at 1."),
+      select: z.array(z.string()).optional().describe("Fields to return, such as id, summary, or description."),
     },
     async (params) => {
       return withMantisConfigured("get_issues", async () => {
         const issues = await mantisApi.getIssues(params);
-        const jsonString = JSON.stringify(issues);
-        
-        if (jsonString.length < COMPRESSION_THRESHOLD) {
-          return jsonString;
-        }
-
-        const compressed = await gzipAsync(Buffer.from(jsonString));
-        const base64Data = compressed.toString('base64');
-
-        return JSON.stringify({
-          compressed: true,
-          data: base64Data,
-          originalSize: jsonString.length,
-          compressedSize: base64Data.length
-        });
+        return compressLargeJson(issues);
       });
     }
   );
 
-  // 根據 ID 獲取問題詳情
   server.tool(
     "get_issue_by_id",
-    "根據 ID 獲取 Mantis 問題詳情",
+    "Get a single Mantis issue by ID.",
     {
-      issueId: z.number().describe("問題 ID"),
+      issueId: z.number().describe("Issue ID."),
     },
     async ({ issueId }) => {
       return withMantisConfigured("get_issue_by_id", async () => {
-        const issue = await mantisApi.getIssueById(issueId);
-        return JSON.stringify(issue, null, 2);
+        return mantisApi.getIssueById(issueId);
       });
     }
   );
 
-  // 根據用戶名稱查詢用戶
   server.tool(
     "get_user",
-    "根據用戶名稱查詢 Mantis 用戶",
+    "Get a Mantis user by username.",
     {
-      username: z.string().describe("用戶名稱")
+      username: z.string().describe("Username."),
     },
-    async (params) => {
+    async ({ username }) => {
       return withMantisConfigured("get_user", async () => {
-        const user = await mantisApi.getUserByUsername(params.username);
-        return JSON.stringify(user, null, 2);
+        return mantisApi.getUserByUsername(username);
       });
     }
   );
 
-  // 獲取專案列表
-  server.tool(
-    "get_projects",
-    "獲取 Mantis 專案列表",
-    {},
-    async () => {
-      return withMantisConfigured("get_projects", async () => {
-        const projects = await mantisApi.getProjects();
-        return JSON.stringify(projects, null, 2);
-      });
-    }
-  );
+  server.tool("get_projects", "List Mantis projects.", {}, async () => {
+    return withMantisConfigured("get_projects", async () => {
+      return mantisApi.getProjects();
+    });
+  });
 
-  // 獲取問題統計
   server.tool(
     "get_issue_statistics",
-    "獲取 Mantis 問題統計數據，根據不同維度進行分析",
+    "Count Mantis issues grouped by status, priority, severity, handler, or reporter.",
     {
-      projectId: z.number().optional().describe("專案 ID"),
-      groupBy: z.enum(['status', 'priority', 'severity', 'handler', 'reporter']).describe("分組依據"),
-      period: z.enum(['all', 'today', 'week', 'month']).default('all').describe("時間範圍<all-全部, today-今天, week-本週, month-本月>"),
+      projectId: z.number().optional().describe("Project ID."),
+      groupBy: z.enum(["status", "priority", "severity", "handler", "reporter"]).describe("Field to group by."),
+      period: z.enum(["all", "today", "week", "month"]).default("all").describe("Date range based on issue creation time."),
     },
     async (params) => {
       return withMantisConfigured("get_issue_statistics", async () => {
-        // 從 Mantis API 獲取問題並處理統計
         const issues = await mantisApi.getIssues({
           projectId: params.projectId,
-          pageSize: 1000 // 獲取大量數據用於統計
+          pageSize: 1000,
         });
 
-        // 建立統計結果
-        const statistics = {
-          total: issues.length,
-          groupedBy: params.groupBy,
-          period: params.period,
-          data: {} as Record<string, number>
-        };
-
-        // 根據時間範圍過濾
-        let filteredIssues = issues;
-        log.debug("根據時間範圍過濾issues", { issues, params });
-        
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        switch (params.period) {
-          case 'today':
-            filteredIssues = issues.filter(issue => {
-              const createdAt = new Date(issue.created_at);
-              return createdAt >= startOfDay;
-            });
-            break;
-          case 'week':
-            filteredIssues = issues.filter(issue => {
-              const createdAt = new Date(issue.created_at);
-              return createdAt >= startOfWeek;
-            });
-            break;
-          case 'month':
-            filteredIssues = issues.filter(issue => {
-              const createdAt = new Date(issue.created_at);
-              return createdAt >= startOfMonth;
-            });
-            break;
-          case 'all':
-          default:
-            // 保持原有的issues不變
-            break;
-        }
-
-        if (!filteredIssues || filteredIssues.length === 0) {
-          return { error: "沒有查詢到任何Issue" };
-        }
-
-        // 根據分組依據進行統計
-        filteredIssues.forEach(issue => {
-          let key = '';
-
-          switch (params.groupBy) {
-            case 'status':
-              key = issue.status?.name || 'unknown';
-              break;
-            case 'priority':
-              key = issue.priority?.name || 'unknown';
-              break;
-            case 'severity':
-              key = issue.severity?.name || 'unknown';
-              break;
-            case 'handler':
-              key = issue.handler?.name || 'unassigned';
-              break;
-            case 'reporter':
-              key = issue.reporter?.name || 'unknown';
-              break;
-          }
-
-          statistics.data[key] = (statistics.data[key] || 0) + 1;
+        const filteredIssues = issues.filter((issue) => {
+          if (params.period === "all") return true;
+          const createdAt = new Date(issue.created_at);
+          if (params.period === "today") return createdAt >= startOfDay;
+          if (params.period === "week") return createdAt >= startOfWeek;
+          return createdAt >= startOfMonth;
         });
 
-        return JSON.stringify(statistics, null, 2);
+        const data: Record<string, number> = {};
+        for (const issue of filteredIssues) {
+          const key =
+            params.groupBy === "status"
+              ? issue.status?.name || "unknown"
+              : params.groupBy === "priority"
+                ? issue.priority?.name || "unknown"
+                : params.groupBy === "severity"
+                  ? issue.severity?.name || "unknown"
+                  : params.groupBy === "handler"
+                    ? issue.handler?.name || "unassigned"
+                    : issue.reporter?.name || "unknown";
+
+          data[key] = (data[key] || 0) + 1;
+        }
+
+        return {
+          total: filteredIssues.length,
+          groupedBy: params.groupBy,
+          period: params.period,
+          data,
+        };
       });
     }
   );
 
-  // 獲取分派統計
   server.tool(
     "get_assignment_statistics",
-    "獲取 Mantis 問題分派統計數據，分析不同用戶的問題分派情況",
+    "Count Mantis issues assigned to each user.",
     {
-      projectId: z.number().optional().describe("專案 ID"),
-      includeUnassigned: z.boolean().default(true).describe("是否包含未分派問題"),
-      statusFilter: z.array(z.number()).optional().describe("狀態過濾器，只計算特定狀態的問題"),
+      projectId: z.number().optional().describe("Project ID."),
+      includeUnassigned: z.boolean().default(true).describe("Include unassigned issues."),
+      statusFilter: z.array(z.number()).optional().describe("Status IDs to include."),
     },
     async (params) => {
       return withMantisConfigured("get_assignment_statistics", async () => {
-        // 獲取問題
         const issues = await mantisApi.getIssues({
           projectId: params.projectId,
-          pageSize: 1000 // 獲取大量數據用於統計
+          pageSize: 1000,
         });
 
-        // 過濾問題
-        let filteredIssues = issues;
-        if (params.statusFilter?.length) {
-          filteredIssues = issues.filter(issue =>
-            params.statusFilter?.includes(issue.status.id)
-          );
-        }
+        const filteredIssues = params.statusFilter?.length
+          ? issues.filter((issue) => params.statusFilter?.includes(issue.status.id))
+          : issues;
 
-        // 建立用戶問題統計
-        const userMap = new Map<number, {
-          id: number;
-          name: string;
-          email: string;
-          issueCount: number;
-          openIssues: number;
-          closedIssues: number;
-          issues: number[];
-        }>();
+        const userMap = new Map<
+          number,
+          {
+            id: number;
+            name: string;
+            email: string;
+            issueCount: number;
+            openIssues: number;
+            closedIssues: number;
+            issues: number[];
+          }
+        >();
 
-        // 從問題中收集所有處理人ID
         const handlerIds = new Set<number>();
-        filteredIssues.forEach(issue => {
+        for (const issue of filteredIssues) {
           if (issue.handler?.id) {
             handlerIds.add(issue.handler.id);
           }
-        });
+        }
 
-        // 查詢每個處理人的詳細資訊並初始化統計
         for (const handlerId of handlerIds) {
           const user = await mantisApi.getUser(handlerId);
           userMap.set(user.id, {
             id: user.id,
             name: user.name,
-            email: user.email || '',
+            email: user.email || "",
             issueCount: 0,
             openIssues: 0,
             closedIssues: 0,
-            issues: []
+            issues: [],
           });
         }
 
-        // 未分派問題統計
         let unassignedCount = 0;
-        let unassignedIssues: number[] = [];
+        const unassignedIssues: number[] = [];
 
-        // 計算統計
-        filteredIssues.forEach(issue => {
-          if (issue.handler && issue.handler.id) {
+        for (const issue of filteredIssues) {
+          if (issue.handler?.id) {
             const userStat = userMap.get(issue.handler.id);
-            if (userStat) {
-              userStat.issueCount++;
-              userStat.issues.push(issue.id);
+            if (!userStat) continue;
 
-              // 根據狀態判斷是否為關閉狀態
-              if (issue.status.name.toLowerCase().includes('closed') ||
-                issue.status.name.toLowerCase().includes('resolved')) {
-                userStat.closedIssues++;
-              } else {
-                userStat.openIssues++;
-              }
+            userStat.issueCount++;
+            userStat.issues.push(issue.id);
+
+            const statusName = issue.status.name.toLowerCase();
+            if (statusName.includes("closed") || statusName.includes("resolved")) {
+              userStat.closedIssues++;
+            } else {
+              userStat.openIssues++;
             }
           } else if (params.includeUnassigned) {
             unassignedCount++;
             unassignedIssues.push(issue.id);
           }
-        });
+        }
 
-        // 構建結果
-        const statistics = {
-          totalIssues: filteredIssues.length,
-          assignedIssues: filteredIssues.length - unassignedCount,
-          unassignedIssues: unassignedCount,
-          userStatistics: Array.from(userMap.values())
-            .filter(stat => stat.issueCount > 0)
-            .sort((a, b) => b.issueCount - a.issueCount)
-        };
+        const userStatistics = Array.from(userMap.values())
+          .filter((stat) => stat.issueCount > 0)
+          .sort((a, b) => b.issueCount - a.issueCount);
 
         if (params.includeUnassigned && unassignedCount > 0) {
-          statistics.userStatistics.push({
+          userStatistics.push({
             id: 0,
-            name: "未分派",
+            name: "Unassigned",
             email: "",
             issueCount: unassignedCount,
             openIssues: unassignedCount,
             closedIssues: 0,
-            issues: unassignedIssues
+            issues: unassignedIssues,
           });
         }
 
-        return JSON.stringify(statistics, null, 2);
+        return {
+          totalIssues: filteredIssues.length,
+          assignedIssues: filteredIssues.length - unassignedCount,
+          unassignedIssues: unassignedCount,
+          userStatistics,
+        };
       });
     }
   );
 
-  // 獲取指定專案的所有用戶
   server.tool(
     "get_users_by_project_id",
-    "獲取指定專案的所有用戶",
+    "List users for a Mantis project.",
     {
-      projectId: z.number().describe("專案 ID"),
+      projectId: z.number().describe("Project ID."),
     },
-    async (params) => {
+    async ({ projectId }) => {
       return withMantisConfigured("get_users_by_project_id", async () => {
-        const users = await mantisApi.getUsersByProjectId(params.projectId);
-        return JSON.stringify(users, null, 2);
+        return mantisApi.getUsersByProjectId(projectId);
       });
     }
   );
 
-  // 獲取所有用戶
-  server.tool(
-    "get_users",
-    "用暴力法強制取得所有用戶",
-    {},
-    async () => {
-      return withMantisConfigured("get_users", async () => {
-        let notFoundCount = 0;
-        let id = 1;
-        let users: User[] = [];
-        do {
-          try {
-            const user = await mantisApi.getUser(id);
-            users.push(user);
-            id++;
-            notFoundCount = 0; // 重置計數器
-          } catch (error) {
-            if (error instanceof MantisApiError && error.statusCode === 404) {
-              notFoundCount++;
-              id++;
-            }
+  server.tool("get_users", "Best-effort list of Mantis users.", {}, async () => {
+    return withMantisConfigured("get_users", async () => {
+      let notFoundCount = 0;
+      let id = 1;
+      const users: User[] = [];
+
+      do {
+        try {
+          const user = await mantisApi.getUser(id);
+          users.push(user);
+          notFoundCount = 0;
+        } catch (error) {
+          if (error instanceof MantisApiError && error.statusCode === 404) {
+            notFoundCount++;
+          } else {
+            throw error;
           }
-        } while (notFoundCount < 10);
-        return JSON.stringify(users, null, 2);
-      });
-    }
-  );
+        } finally {
+          id++;
+        }
+      } while (notFoundCount < 10);
 
-  // 新增 issue
+      return users;
+    });
+  });
+
   server.tool(
     "create_issue",
-    "新增一個 Mantis 問題",
+    "Create a Mantis issue.",
     {
-      summary: z.string().describe("問題摘要"),
-      description: z.string().describe("問題詳細描述"),
-      projectId: z.number().describe("專案 ID"),
-      categoryId: z.number().optional().describe("分類 ID"),
-      handlerId: z.number().optional().describe("處理人 ID"),
-      priority: z.string().optional().describe("優先級"),
-      severity: z.string().optional().describe("嚴重性"),
-      additional_information: z.string().optional().describe("附加信息"),
+      summary: z.string().describe("Issue summary."),
+      description: z.string().describe("Issue description."),
+      projectId: z.number().describe("Project ID."),
+      categoryId: z.number().optional().describe("Category ID. Defaults to 1 when omitted."),
+      handlerId: z.number().optional().describe("Assigned user ID."),
+      priority: z.string().optional().describe("Priority name."),
+      severity: z.string().optional().describe("Severity name."),
+      additional_information: z.string().optional().describe("Additional information."),
     },
     async (params) => {
       return withMantisConfigured("create_issue", async () => {
-        const issueData = {
+        return mantisApi.createIssue({
           summary: params.summary,
           description: params.description,
           project: { id: params.projectId },
-          category: { id: params.categoryId || 1 }, // 默認 category
+          category: { id: params.categoryId || 1 },
           handler: params.handlerId ? { id: params.handlerId } : undefined,
           priority: params.priority ? { name: params.priority } : undefined,
           severity: params.severity ? { name: params.severity } : undefined,
           additional_information: params.additional_information,
-        };
-        const issue = await mantisApi.createIssue(issueData);
-        return JSON.stringify(issue, null, 2);
+        });
       });
     }
   );
 
-  // 修改 issue
   server.tool(
     "update_issue",
-    "修改一個 Mantis 問題",
+    "Update a Mantis issue.",
     {
-      issueId: z.number().describe("問題 ID"),
-      summary: z.string().optional().describe("問題摘要"),
-      description: z.string().optional().describe("問題詳細描述"),
-      handlerId: z.number().optional().describe("處理人 ID"),
-      status: z.string().optional().describe("狀態"),
-      resolution: z.string().optional().describe("解決方案"),
-      priority: z.string().optional().describe("優先級"),
-      severity: z.string().optional().describe("嚴重性"),
+      issueId: z.number().describe("Issue ID."),
+      summary: z.string().optional().describe("Issue summary."),
+      description: z.string().optional().describe("Issue description."),
+      handlerId: z.number().optional().describe("Assigned user ID."),
+      status: z.string().optional().describe("Status name."),
+      resolution: z.string().optional().describe("Resolution name."),
+      priority: z.string().optional().describe("Priority name."),
+      severity: z.string().optional().describe("Severity name."),
     },
     async (params) => {
       return withMantisConfigured("update_issue", async () => {
-        const updateData = {
+        return mantisApi.updateIssue(params.issueId, {
           summary: params.summary,
           description: params.description,
           handler: params.handlerId ? { id: params.handlerId } : undefined,
@@ -499,30 +408,25 @@ export function createServer(): McpServer {
           resolution: params.resolution ? { name: params.resolution } : undefined,
           priority: params.priority ? { name: params.priority } : undefined,
           severity: params.severity ? { name: params.severity } : undefined,
-        };
-        const issue = await mantisApi.updateIssue(params.issueId, updateData);
-        return JSON.stringify(issue, null, 2);
+        });
       });
     }
   );
 
-  // 新增 issue note
   server.tool(
     "add_issue_note",
-    "為一個 Mantis 問題新增備註",
+    "Add a note to a Mantis issue.",
     {
-      issueId: z.number().describe("問題 ID"),
-      text: z.string().describe("備註內容"),
-      view_state: z.string().optional().default("public").describe("可見狀態 (public 或 private)"),
+      issueId: z.number().describe("Issue ID."),
+      text: z.string().describe("Note text."),
+      view_state: z.string().optional().default("public").describe("View state: public or private."),
     },
     async (params) => {
       return withMantisConfigured("add_issue_note", async () => {
-        const noteData = {
+        return mantisApi.addIssueNote(params.issueId, {
           text: params.text,
           view_state: { name: params.view_state },
-        };
-        const result = await mantisApi.addIssueNote(params.issueId, noteData);
-        return JSON.stringify(result, null, 2);
+        });
       });
     }
   );
