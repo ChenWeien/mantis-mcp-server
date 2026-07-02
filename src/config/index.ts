@@ -30,6 +30,7 @@ const ConfigSchema = z.object({
   LOG_LEVEL: z.enum(["error", "warn", "info", "debug"]).default("info"),
   CACHE_ENABLED: booleanFromEnv.default(true),
   CACHE_TTL_SECONDS: z.coerce.number().default(300),
+  MANTIS_API_TIMEOUT_MS: z.coerce.number().default(300_000),
   LOG_DIR: z.string().default(path.join(__dirname, "../../logs")),
   ENABLE_FILE_LOGGING: booleanFromEnv.default(false),
 });
@@ -43,6 +44,7 @@ const parseConfig = () => {
       LOG_LEVEL: process.env.LOG_LEVEL,
       CACHE_ENABLED: process.env.CACHE_ENABLED,
       CACHE_TTL_SECONDS: process.env.CACHE_TTL_SECONDS,
+      MANTIS_API_TIMEOUT_MS: process.env.MANTIS_API_TIMEOUT_MS,
       LOG_DIR: process.env.LOG_DIR,
       ENABLE_FILE_LOGGING: process.env.ENABLE_FILE_LOGGING,
     });

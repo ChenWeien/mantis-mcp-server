@@ -98,16 +98,22 @@ export class MantisApi {
 
     this.api = axios.create({
       baseURL: config.MANTIS_API_URL,
-      timeout: 10_000,
+      timeout: config.MANTIS_API_TIMEOUT_MS,
       headers: {
         "Content-Type": "application/json",
         ...(config.MANTIS_API_KEY && { Authorization: config.MANTIS_API_KEY }),
+        ...(config.MANTIS_API_KEY && { "X-API-KEY": config.MANTIS_API_KEY }),
+        ...(config.MANTIS_API_KEY && { "X-MANTISBT-API-KEY": config.MANTIS_API_KEY }),
+      },
+      params: {
+        ...(config.MANTIS_API_KEY && { access_token: config.MANTIS_API_KEY }),
+        ...(config.MANTIS_API_KEY && { api_key: config.MANTIS_API_KEY }),
       },
     });
 
     log.info("Mantis API client initialized.", {
       baseURL: config.MANTIS_API_URL,
-      timeout: 10_000,
+      timeout: config.MANTIS_API_TIMEOUT_MS,
       hasApiKey: Boolean(config.MANTIS_API_KEY),
     });
 

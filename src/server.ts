@@ -130,6 +130,47 @@ export function createServer(): McpServer {
     }
   );
 
+  const fetchIssuesForStats = async (params: {
+    projectId?: number;
+    statusId?: number;
+    handlerId?: number;
+    reporterId?: number;
+    priority?: number;
+    severity?: number;
+    search?: string;
+    period: "all" | "today" | "week" | "month";
+    select?: string[];
+  }) => {
+    const pageSize = 100;
+    let page = 1;
+    const issues: any[] = [];
+
+    while (true) {
+      const result = await mantisApi.getIssues({
+        projectId: params.projectId,
+        statusId: params.statusId,
+        handlerId: params.handlerId,
+        reporterId: params.reporterId,
+        priority: params.priority,
+        severity: params.severity,
+        search: params.search,
+        select: params.select,
+        page,
+        pageSize,
+      });
+
+      issues.push(...result);
+
+      if (result.length < pageSize) {
+        break;
+      }
+
+      page += 1;
+    }
+
+    return issues;
+  };
+
   server.tool(
     "get_issue_by_id",
     "Get a single Mantis issue by ID.",
@@ -170,11 +211,12 @@ export function createServer(): McpServer {
       groupBy: z.enum(["status", "priority", "severity", "handler", "reporter"]).describe("Field to group by."),
       period: z.enum(["all", "today", "week", "month"]).default("all").describe("Date range based on issue creation time."),
     },
-    async (params) => {
+      async (params) => {
       return withMantisConfigured("get_issue_statistics", async () => {
-        const issues = await mantisApi.getIssues({
+        const issues = await fetchIssuesForStats({
           projectId: params.projectId,
-          pageSize: 1000,
+          period: params.period,
+          select: ["id", "status", "priority", "severity", "handler", "reporter", "created_at"],
         });
 
         const now = new Date();
@@ -224,11 +266,12 @@ export function createServer(): McpServer {
       includeUnassigned: z.boolean().default(true).describe("Include unassigned issues."),
       statusFilter: z.array(z.number()).optional().describe("Status IDs to include."),
     },
-    async (params) => {
+      async (params) => {
       return withMantisConfigured("get_assignment_statistics", async () => {
-        const issues = await mantisApi.getIssues({
+        const issues = await fetchIssuesForStats({
           projectId: params.projectId,
-          pageSize: 1000,
+          period: "all",
+          select: ["id", "status", "handler"],
         });
 
         const filteredIssues = params.statusFilter?.length
