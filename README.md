@@ -10,7 +10,7 @@
 
 1. 先下載或 clone 這個 repo。
 2. 把專案放到 Codex 可讀到的外掛來源資料夾。
-   - 預設位置是「你的使用者家目錄」底下的 `plugins/mantis-mcp-server`
+   - 預設位置是「你的使用者家目錄」底下的 `plugins\mantis-mcp-server`
    - Windows 範例：`C:\Users\<你的使用者名稱>\plugins\mantis-mcp-server`
 3. 打開 Codex。
 4. 打開外掛頁。
@@ -22,17 +22,31 @@
 
 ### 這個外掛怎麼出現在 Codex
 
-Codex 會讀你「使用者家目錄」底下的本機 marketplace 檔案 `.agents/plugins/marketplace.json`。
+Codex 會讀你「使用者家目錄」底下的本機 marketplace 檔案 `.agents\plugins\marketplace.json`。
 這個檔案裡有一筆 `mantis-mcp-server` 入口，指向本機的外掛資料夾：
 
 ```json
 {
-  "name": "mantis-mcp-server",
-  "source": {
-    "source": "local",
-    "path": "./plugins/mantis-mcp-server"
-  }
+  "name": "personal",
+  "interface": {
+    "displayName": "Personal"
+  },
+  "plugins": [
+    {
+      "name": "mantis-mcp-server",
+      "source": {
+        "source": "local",
+        "path": "./plugins/mantis-mcp-server"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
 }
+
 ```
 
 如果你是從零開始做自己的電腦，這個入口可以用 Codex 的 plugin scaffold 或 marketplace 設定建立，然後再讓 Codex 讀到它。
