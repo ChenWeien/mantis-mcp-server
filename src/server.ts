@@ -287,7 +287,7 @@ export function createServer(): McpServer {
             issueCount: number;
             openIssues: number;
             closedIssues: number;
-            issues: number[];
+            issues: string[];
           }
         >();
 
@@ -312,7 +312,7 @@ export function createServer(): McpServer {
         }
 
         let unassignedCount = 0;
-        const unassignedIssues: number[] = [];
+        const unassignedIssues: string[] = [];
 
         for (const issue of filteredIssues) {
           if (issue.handler?.id) {

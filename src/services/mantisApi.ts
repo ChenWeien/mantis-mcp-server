@@ -3,7 +3,7 @@ import { config } from "../config/index.js";
 import { log } from "../utils/logger.js";
 
 export interface Issue {
-  id: number;
+  id: string;
   summary: string;
   description: string;
   status: {
@@ -39,6 +39,30 @@ export interface Issue {
   created_at: string;
   updated_at: string;
 }
+
+type ApiIssue = Omit<Issue, "id"> & { id: number | string };
+type ApiIssueResponse =
+  | ApiIssue
+  | { issue: ApiIssue }
+  | { issues: ApiIssue[] };
+type IssueResponse = Issue | { issue: Issue } | { issues: Issue[] };
+
+const formatIssue = (issue: ApiIssue): Issue => ({
+  ...issue,
+  id: String(issue.id).padStart(7, "0"),
+});
+
+const formatIssueResponse = (response: ApiIssueResponse): IssueResponse => {
+  if ("issues" in response) {
+    return { ...response, issues: response.issues.map(formatIssue) };
+  }
+
+  if ("issue" in response) {
+    return { ...response, issue: formatIssue(response.issue) };
+  }
+
+  return formatIssue(response);
+};
 
 export interface IssueSearchParams {
   projectId?: number;
@@ -204,19 +228,21 @@ export class MantisApi {
     const page = params.page || 1;
     const cacheKey = `issues-${filter}-${page}-${pageSize}`;
 
-    const response = await this.cachedRequest<{ issues: Issue[] }>(cacheKey, () => {
+    const response = await this.cachedRequest<{ issues: ApiIssue[] }>(cacheKey, () => {
       return this.api.get(`/issues?page=${page}&page_size=${pageSize}${filter}`);
     });
 
-    return response.issues;
+    return response.issues.map(formatIssue);
   }
 
-  async getIssueById(issueId: number): Promise<Issue> {
+  async getIssueById(issueId: number): Promise<{ issues: Issue[] }> {
     log.info("Getting Mantis issue.", { issueId });
 
-    return this.cachedRequest<Issue>(`issue-${issueId}`, () => {
+    const response = await this.cachedRequest<{ issues: ApiIssue[] }>(`issue-${issueId}`, () => {
       return this.api.get(`/issues/${issueId}`);
     });
+
+    return { ...response, issues: response.issues.map(formatIssue) };
   }
 
   async getCurrentUser(): Promise<User> {
@@ -260,18 +286,18 @@ export class MantisApi {
     this.cache.clear();
   }
 
-  async createIssue(issueData: unknown): Promise<Issue> {
+  async createIssue(issueData: unknown): Promise<IssueResponse> {
     log.info("Creating Mantis issue.", { issueData });
-    const response = await this.api.post("/issues", issueData);
+    const response = await this.api.post<ApiIssueResponse>("/issues", issueData);
     this.clearCache();
-    return response.data.issue;
+    return formatIssueResponse(response.data);
   }
 
-  async updateIssue(issueId: number, updateData: unknown): Promise<Issue> {
+  async updateIssue(issueId: number, updateData: unknown): Promise<IssueResponse> {
     log.info("Updating Mantis issue.", { issueId, updateData });
-    const response = await this.api.patch(`/issues/${issueId}`, updateData);
+    const response = await this.api.patch<ApiIssueResponse>(`/issues/${issueId}`, updateData);
     this.clearCache();
-    return response.data.issue;
+    return formatIssueResponse(response.data);
   }
 
   async addIssueNote(issueId: number, noteData: unknown): Promise<unknown> {
