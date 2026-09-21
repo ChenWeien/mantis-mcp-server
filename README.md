@@ -93,7 +93,7 @@ ENABLE_FILE_LOGGING=false
 - 查看指派統計
 - 列出專案中的使用者
 - 建立 issue
-- 更新 issue
+- 更新 issue（含加入 / 移出 target version / roadmap：`versionId` + `versionAction`）
 - 新增 issue note
 
 ## 本機開發

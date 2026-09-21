@@ -38,6 +38,10 @@ export interface Issue {
   };
   created_at: string;
   updated_at: string;
+  target_version?: {
+    id: number;
+    name: string;
+  } | null;
 }
 
 type ApiIssue = Omit<Issue, "id"> & { id: number | string };
@@ -298,6 +302,51 @@ export class MantisApi {
     const response = await this.api.patch<ApiIssueResponse>(`/issues/${issueId}`, updateData);
     this.clearCache();
     return formatIssueResponse(response.data);
+  }
+
+  /**
+   * Build the REST payload to add an issue to a target version (roadmap)
+   * or remove it from that version.
+   *
+   * Remove only clears target_version when the issue is currently on versionId.
+   * Returns null when remove is a no-op (already unassigned).
+   */
+  async buildTargetVersionUpdate(
+    issueId: number,
+    versionId: number,
+    action: "add" | "remove"
+  ): Promise<{ target_version: { id: number; name?: string } } | null> {
+    if (versionId <= 0) {
+      throw new MantisApiError("versionId must be a positive Mantis version ID.");
+    }
+
+    if (action === "add") {
+      return { target_version: { id: versionId } };
+    }
+
+    this.cache.delete(`issue-${issueId}`);
+    const current = await this.getIssueById(issueId);
+    const issue = current.issues[0];
+    const currentVersionId = Number(issue?.target_version?.id || 0) || 0;
+
+    if (!currentVersionId) {
+      log.info("Issue is not assigned to a target version; skip remove.", {
+        issueId,
+        versionId,
+      });
+      return null;
+    }
+
+    if (currentVersionId !== versionId) {
+      const currentName = issue.target_version?.name;
+      throw new MantisApiError(
+        `Issue ${issueId} is assigned to version ${currentVersionId}` +
+          `${currentName ? ` (${currentName})` : ""}, not ${versionId}.`
+      );
+    }
+
+    // Mantis REST clears version fields with id 0 and empty name.
+    return { target_version: { id: 0, name: "" } };
   }
 
   async addIssueNote(issueId: number, noteData: unknown): Promise<unknown> {

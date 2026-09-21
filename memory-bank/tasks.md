@@ -1,6 +1,11 @@
 # 任務追蹤
 
 ## 進行中的任務
+- [X] update_issue 支援 version_id 加入 / 移出 roadmap (target version)
+  - [X] 在 update_issue 新增 versionId、versionAction 參數
+  - [X] PATCH target_version：add 設 versionId，remove 在比對後清空
+  - [X] 更新 Issue 型別、CHANGELOG、README
+  - [X] 編譯驗證
 - [X] 初始化專案結構和文件
 - [X] 擴展 MCP Server 功能
   - [X] 修改 get_issues 工具與 Mantis API 整合
@@ -45,6 +50,7 @@
 - [X] 添加使用說明文檔
 
 ## 已完成的任務
+- [X] update_issue 支援 version_id 加入 / 移出 roadmap (target version) - Completed on 2026-09-21
 - [X] 初始化專案結構和文件
 - [X] 設計系統架構
 - [X] 實作 Mantis API 整合

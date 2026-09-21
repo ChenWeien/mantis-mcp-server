@@ -1,18 +1,15 @@
 # 當前上下文
 
 ## 當前重點
+- `update_issue` 已支援把 issue 加入或移出 Mantis target version（roadmap）
 - 添加單元測試和整合測試
 - 準備發布第一個版本
 - 優化錯誤處理
 
 ## 最近更改
-- 完成 Mantis API 整合
-- 實現基本錯誤處理機制
-- 添加環境變數配置
-- 優化工具實現
-- 添加緩存機制
-- 完成統計功能實現
-- 更新 README 文檔和使用指南
+- `update_issue` 新增 `versionId`、`versionAction`（`add` / `remove`），對應 REST `target_version`
+- remove 會先讀目前 target version，只有相同 versionId 才清空為 `{ id: 0, name: "" }`
+- 版本號更新為 0.4.9
 
 ## 待處理事項
 - 添加單元測試
@@ -28,6 +25,10 @@
 - 添加環境變數和配置管理
 - 實作緩存機制提高性能
 - 實現統計功能支持多種維度分析
+- Roadmap 指派走 Mantis `target_version`，不清 product version / fixed_in_version
+
+## Recent Completions
+- update_issue 支援 version_id 加入 / 移出 roadmap (target version) has been completed and archived. Next focus is on 單元測試.
 
 ## 最近完成
 - 完成基礎架構建設
@@ -36,4 +37,5 @@
 - 添加認證機制
 - 實現錯誤處理和緩存
 - 實現統計功能
-- 完成文檔撰寫 
+- 完成文檔撰寫
+- `update_issue` 支援 roadmap version 加入 / 移出

@@ -1,5 +1,11 @@
 # 更新日誌
 
+## [0.4.9] - 2026-09-21
+
+### 新增
+- `update_issue` 支援 `versionId` 與 `versionAction`（`add` / `remove`），可把 issue 加入或移出 Mantis target version（roadmap）
+- `remove` 只在目前 target version 等於指定 `versionId` 時才清空，避免誤清其他版本
+
 ## [0.4.0] - 2024-03-29
 
 ### 改進

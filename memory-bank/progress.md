@@ -4,6 +4,7 @@
 - 完成 MCP Server 核心功能實現
 - 完成 Mantis API 整合
 - 完成統計功能開發
+- `update_issue` 可把 issue 加入 / 移出 target version（roadmap）
 - 進行中: 測試和優化
 
 ## 里程碑
@@ -18,6 +19,7 @@
 - [ ] 完成測試和文檔
 
 ## 已完成的任務
+- update_issue 支援 version_id 加入 / 移出 roadmap (target version) - Completed on 2026-09-21, see [archive entry](mdc:../docs/archive/completed_tasks.md#task-update_issue-version-roadmap-v10)
 - 初始化專案結構和文件
 - 定義 MCP Server 的核心需求
 - 設計系統架構和選擇技術堆疊

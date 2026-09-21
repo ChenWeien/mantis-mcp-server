@@ -106,7 +106,7 @@ async function compressLargeJson(data: unknown): Promise<string> {
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "mantis-mcp-server",
-    version: "0.4.8",
+    version: "0.4.9",
   });
 
   server.tool(
@@ -430,7 +430,7 @@ export function createServer(): McpServer {
 
   server.tool(
     "update_issue",
-    "Update a Mantis issue.",
+    "Update a Mantis issue. Use versionId and versionAction to add or remove the issue from a target version (roadmap).",
     {
       issueId: z.number().describe("Issue ID."),
       summary: z.string().optional().describe("Issue summary."),
@@ -440,10 +440,24 @@ export function createServer(): McpServer {
       resolution: z.string().optional().describe("Resolution name."),
       priority: z.string().optional().describe("Priority name."),
       severity: z.string().optional().describe("Severity name."),
+      versionId: z
+        .number()
+        .optional()
+        .describe("Mantis version ID (target version / roadmap). Required with versionAction."),
+      versionAction: z
+        .enum(["add", "remove"])
+        .optional()
+        .describe(
+          'Add the issue to versionId, or remove it from that version. Defaults to "add" when versionId is set.'
+        ),
     },
     async (params) => {
       return withMantisConfigured("update_issue", async () => {
-        return mantisApi.updateIssue(params.issueId, {
+        if (params.versionAction !== undefined && params.versionId === undefined) {
+          throw new Error("versionId is required when versionAction is set.");
+        }
+
+        const updateData: Record<string, unknown> = {
           summary: params.summary,
           description: params.description,
           handler: params.handlerId ? { id: params.handlerId } : undefined,
@@ -451,7 +465,31 @@ export function createServer(): McpServer {
           resolution: params.resolution ? { name: params.resolution } : undefined,
           priority: params.priority ? { name: params.priority } : undefined,
           severity: params.severity ? { name: params.severity } : undefined,
-        });
+        };
+
+        if (params.versionId !== undefined) {
+          const versionUpdate = await mantisApi.buildTargetVersionUpdate(
+            params.issueId,
+            params.versionId,
+            params.versionAction ?? "add"
+          );
+
+          if (versionUpdate) {
+            Object.assign(updateData, versionUpdate);
+          } else if (
+            !params.summary &&
+            !params.description &&
+            params.handlerId === undefined &&
+            !params.status &&
+            !params.resolution &&
+            !params.priority &&
+            !params.severity
+          ) {
+            return mantisApi.getIssueById(params.issueId);
+          }
+        }
+
+        return mantisApi.updateIssue(params.issueId, updateData);
       });
     }
   );

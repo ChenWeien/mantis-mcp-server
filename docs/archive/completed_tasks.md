@@ -1,5 +1,29 @@
 # 完成的任務
 
+## Task: update_issue version roadmap (v1.0)
+Last Updated: 2026-09-21
+
+### Implementation Results
+- Added `versionId` and `versionAction` (`add` / `remove`) to the `update_issue` MCP tool
+- `add` PATCHes Mantis `target_version` to the given version ID (roadmap)
+- `remove` reads the current target version first and clears it only when it matches `versionId`, using `{ id: 0, name: "" }`
+- Server version bumped to 0.4.9
+
+### Completed Testing
+- TypeScript build (`npm run build`) succeeded
+- No new linter errors on `src/server.ts` or `src/services/mantisApi.ts`
+- Live add of issue 100113 to version 10153 was already verified via REST in the previous session; this change exposes that path through MCP
+
+### Lessons Learned
+- MCP `update_issue` previously could not set roadmap because the REST payload omitted `target_version`
+- Mantis treats roadmap membership as `target_version`, not product `version` or `fixed_in_version`
+- Clearing a version field is not the same as omitting it; PATCH must send `{ id: 0, name: "" }` (or equivalent) or the old value remains
+
+### Documentation Updates
+- `CHANGELOG.md` 0.4.9
+- `README.md` update_issue note
+- `memory-bank/tasks.md`, `activeContext.md`, `progress.md`, `systemPatterns.md`
+
 ## 任務：擴展 MCP Server 功能 (v1.0)
 最後更新：2024-03-29
 
