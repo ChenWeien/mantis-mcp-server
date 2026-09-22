@@ -4,6 +4,7 @@ import { promisify } from "util";
 import { z } from "zod";
 import { isMantisConfigured } from "./config/index.js";
 import mantisApi, { MantisApiError, User } from "./services/mantisApi.js";
+import { customFieldsParamSchema, mergeCustomFieldsIntoPayload } from "./utils/customFields.js";
 import { log } from "./utils/logger.js";
 
 const gzipAsync = promisify(gzip);
@@ -411,10 +412,11 @@ export function createServer(): McpServer {
       priority: z.string().optional().describe("Priority name."),
       severity: z.string().optional().describe("Severity name."),
       additional_information: z.string().optional().describe("Additional information."),
+      customFields: customFieldsParamSchema,
     },
     async (params) => {
       return withMantisConfigured("create_issue", async () => {
-        return mantisApi.createIssue({
+        const issueData: Record<string, unknown> = {
           summary: params.summary,
           description: params.description,
           project: { id: params.projectId },
@@ -423,14 +425,16 @@ export function createServer(): McpServer {
           priority: params.priority ? { name: params.priority } : undefined,
           severity: params.severity ? { name: params.severity } : undefined,
           additional_information: params.additional_information,
-        });
+        };
+        mergeCustomFieldsIntoPayload(issueData, params.customFields);
+        return mantisApi.createIssue(issueData);
       });
     }
   );
 
   server.tool(
     "update_issue",
-    "Update a Mantis issue. Use versionId and versionAction to add or remove the issue from a target version (roadmap).",
+    "Update a Mantis issue. Use versionId and versionAction to add or remove the issue from a target version (roadmap). Use customFields to write any Mantis custom field by name or ID.",
     {
       issueId: z.number().describe("Issue ID."),
       summary: z.string().optional().describe("Issue summary."),
@@ -450,6 +454,7 @@ export function createServer(): McpServer {
         .describe(
           'Add the issue to versionId, or remove it from that version. Defaults to "add" when versionId is set.'
         ),
+      customFields: customFieldsParamSchema,
     },
     async (params) => {
       return withMantisConfigured("update_issue", async () => {
@@ -466,6 +471,7 @@ export function createServer(): McpServer {
           priority: params.priority ? { name: params.priority } : undefined,
           severity: params.severity ? { name: params.severity } : undefined,
         };
+        mergeCustomFieldsIntoPayload(updateData, params.customFields);
 
         if (params.versionId !== undefined) {
           const versionUpdate = await mantisApi.buildTargetVersionUpdate(
@@ -483,10 +489,18 @@ export function createServer(): McpServer {
             !params.status &&
             !params.resolution &&
             !params.priority &&
-            !params.severity
+            !params.severity &&
+            !params.customFields?.length
           ) {
             return mantisApi.getIssueById(params.issueId);
           }
+        }
+
+        const hasUpdate = Object.entries(updateData).some(
+          ([key, value]) => value !== undefined && (key !== "custom_fields" || Array.isArray(value))
+        );
+        if (!hasUpdate) {
+          throw new Error("No fields to update. Provide at least one issue or custom field change.");
         }
 
         return mantisApi.updateIssue(params.issueId, updateData);

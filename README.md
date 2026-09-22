@@ -93,7 +93,8 @@ ENABLE_FILE_LOGGING=false
 - 查看指派統計
 - 列出專案中的使用者
 - 建立 issue
-- 更新 issue（含加入 / 移出 target version / roadmap：`versionId` + `versionAction`）
+- 更新 issue（含加入 / 移出 target version / roadmap：`versionId` + `versionAction`；自訂欄位：`customFields`）
+- 建立 / 更新 issue 時寫入任意自訂欄位（以 `fieldName` 或 `fieldId` + `value`）
 - 新增 issue note
 
 ## 本機開發
