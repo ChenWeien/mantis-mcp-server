@@ -97,6 +97,35 @@ ENABLE_FILE_LOGGING=false
 - 建立 / 更新 issue 時寫入任意自訂欄位（以 `fieldName` 或 `fieldId` + `value`）
 - 新增 issue note
 
+## 更新自訂欄位 395（MCP Tool）
+
+`update_issue` 與 `create_issue` 的參數名稱是 `customFields`。不要傳 Mantis REST 的 `custom_fields`：工具 schema 不接受這個鍵，呼叫會成功但欄位不會被寫入。
+
+欄位 395 的顯示名稱是 `MCP Tool`。每一筆至少要有 `value`，再加上 `fieldId` 或 `fieldName`（兩者都給也可以）。
+
+把 bug 100413 的 MCP Tool 設成 `render_image`：
+
+```json
+{
+  "issueId": 100413,
+  "customFields": [
+    { "fieldId": 395, "fieldName": "MCP Tool", "value": "render_image" }
+  ]
+}
+```
+
+只給 id 或只給名稱也可以：
+
+```json
+{ "issueId": 100413, "customFields": [{ "fieldId": 395, "value": "render_image" }] }
+```
+
+```json
+{ "issueId": 100413, "customFields": [{ "fieldName": "MCP Tool", "value": "render_image" }] }
+```
+
+寫完後用 `get_issue_by_id` 讀回該 issue，確認 `custom_fields` 裡 id 395 的 `value` 已是新值。
+
 ## 本機開發
 
 如果你想在本機直接跑這個 server：

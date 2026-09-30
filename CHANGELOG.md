@@ -1,5 +1,11 @@
 # 更新日誌
 
+## [Unreleased] - 2026-09-30
+
+### 文件
+- README 說明如何用 `update_issue` 的 `customFields` 更新自訂欄位 395（MCP Tool）
+- 參數名稱是 `customFields`（`fieldId` 395 或 `fieldName` `"MCP Tool"`，加上 `value`）。傳 REST 形狀的 `custom_fields` 會被 schema 丟掉，issue 不會更新該欄位
+
 ## [0.4.9] - 2026-09-21
 
 ### 新增
