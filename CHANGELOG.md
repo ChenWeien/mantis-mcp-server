@@ -1,6 +1,13 @@
 # 更新日誌
 
-## [Unreleased] - 2026-09-30
+## [Unreleased] - 2026-10-02
+
+### 改進
+- `create_issue` / `update_issue` 同時接受 `customFields` 與 `custom_fields`
+- 自訂欄位陣列同時接受 MCP 形狀（`fieldId` / `fieldName`）與 Mantis REST 形狀（`field.id` / `field.name`），避免 agent 因鍵名或形狀不同而寫入失敗
+
+
+2026-09-30
 
 ### 文件
 - README 說明如何用 `update_issue` 的 `customFields` 更新自訂欄位 395（MCP Tool）

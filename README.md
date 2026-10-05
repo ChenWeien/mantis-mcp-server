@@ -99,9 +99,16 @@ ENABLE_FILE_LOGGING=false
 
 ## 更新自訂欄位 395（MCP Tool）
 
-`update_issue` 與 `create_issue` 的參數名稱是 `customFields`。不要傳 Mantis REST 的 `custom_fields`：工具 schema 不接受這個鍵，呼叫會成功但欄位不會被寫入。
+`update_issue` 與 `create_issue` 同時接受 `customFields` 與 `custom_fields`（兩者等價，可擇一）。若兩個都傳，會合併後一併寫入。
 
-欄位 395 的顯示名稱是 `MCP Tool`。每一筆至少要有 `value`，再加上 `fieldId` 或 `fieldName`（兩者都給也可以）。
+每一筆可用 MCP 形狀或 Mantis REST 形狀：
+
+| 形狀 | 範例 |
+|------|------|
+| MCP | `{ "fieldId": 395, "fieldName": "MCP Tool", "value": "render_image" }` |
+| REST | `{ "field": { "id": 395, "name": "MCP Tool" }, "value": "render_image" }` |
+
+欄位 395 的顯示名稱是 `MCP Tool`。每一筆至少要有 `value`，再加上 id 或名稱（`fieldId`/`fieldName`，或 REST 的 `field.id`/`field.name`）。
 
 把 bug 100413 的 MCP Tool 設成 `render_image`：
 
@@ -110,6 +117,17 @@ ENABLE_FILE_LOGGING=false
   "issueId": 100413,
   "customFields": [
     { "fieldId": 395, "fieldName": "MCP Tool", "value": "render_image" }
+  ]
+}
+```
+
+`custom_fields` 鍵與 REST 形狀也可以：
+
+```json
+{
+  "issueId": 100413,
+  "custom_fields": [
+    { "field": { "id": 395 }, "value": "render_image" }
   ]
 }
 ```

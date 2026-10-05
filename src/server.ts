@@ -4,7 +4,12 @@ import { promisify } from "util";
 import { z } from "zod";
 import { isMantisConfigured } from "./config/index.js";
 import mantisApi, { MantisApiError, User } from "./services/mantisApi.js";
-import { customFieldsParamSchema, mergeCustomFieldsIntoPayload } from "./utils/customFields.js";
+import {
+  customFieldsParamSchema,
+  customFieldsSnakeParamSchema,
+  mergeCustomFieldsIntoPayload,
+  resolveCustomFieldsParam,
+} from "./utils/customFields.js";
 import { log } from "./utils/logger.js";
 
 const gzipAsync = promisify(gzip);
@@ -413,6 +418,7 @@ export function createServer(): McpServer {
       severity: z.string().optional().describe("Severity name."),
       additional_information: z.string().optional().describe("Additional information."),
       customFields: customFieldsParamSchema,
+      custom_fields: customFieldsSnakeParamSchema,
     },
     async (params) => {
       return withMantisConfigured("create_issue", async () => {
@@ -421,12 +427,13 @@ export function createServer(): McpServer {
           description: params.description,
           project: { id: params.projectId },
           category: { id: params.categoryId || 1 },
-          handler: params.handlerId ? { id: params.handlerId } : undefined,
+          handler:
+            params.handlerId !== undefined ? { id: params.handlerId } : undefined,
           priority: params.priority ? { name: params.priority } : undefined,
           severity: params.severity ? { name: params.severity } : undefined,
           additional_information: params.additional_information,
         };
-        mergeCustomFieldsIntoPayload(issueData, params.customFields);
+        mergeCustomFieldsIntoPayload(issueData, resolveCustomFieldsParam(params));
         return mantisApi.createIssue(issueData);
       });
     }
@@ -434,7 +441,7 @@ export function createServer(): McpServer {
 
   server.tool(
     "update_issue",
-    "Update a Mantis issue. Use versionId and versionAction to add or remove the issue from a target version (roadmap). Use customFields to write any Mantis custom field by name or ID.",
+    "Update a Mantis issue. Use versionId and versionAction to add or remove the issue from a target version (roadmap). Use customFields or custom_fields to write any Mantis custom field by name or ID.",
     {
       issueId: z.number().describe("Issue ID."),
       summary: z.string().optional().describe("Issue summary."),
@@ -455,6 +462,7 @@ export function createServer(): McpServer {
           'Add the issue to versionId, or remove it from that version. Defaults to "add" when versionId is set.'
         ),
       customFields: customFieldsParamSchema,
+      custom_fields: customFieldsSnakeParamSchema,
     },
     async (params) => {
       return withMantisConfigured("update_issue", async () => {
@@ -462,16 +470,19 @@ export function createServer(): McpServer {
           throw new Error("versionId is required when versionAction is set.");
         }
 
+        const customFields = resolveCustomFieldsParam(params);
+
         const updateData: Record<string, unknown> = {
           summary: params.summary,
           description: params.description,
-          handler: params.handlerId ? { id: params.handlerId } : undefined,
+          handler:
+            params.handlerId !== undefined ? { id: params.handlerId } : undefined,
           status: params.status ? { name: params.status } : undefined,
           resolution: params.resolution ? { name: params.resolution } : undefined,
           priority: params.priority ? { name: params.priority } : undefined,
           severity: params.severity ? { name: params.severity } : undefined,
         };
-        mergeCustomFieldsIntoPayload(updateData, params.customFields);
+        mergeCustomFieldsIntoPayload(updateData, customFields);
 
         if (params.versionId !== undefined) {
           const versionUpdate = await mantisApi.buildTargetVersionUpdate(
@@ -490,7 +501,7 @@ export function createServer(): McpServer {
             !params.resolution &&
             !params.priority &&
             !params.severity &&
-            !params.customFields?.length
+            !customFields?.length
           ) {
             return mantisApi.getIssueById(params.issueId);
           }

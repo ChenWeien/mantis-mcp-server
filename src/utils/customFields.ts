@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-export const customFieldInputSchema = z.object({
+/** MCP-friendly shape used by agents. */
+export const customFieldMcpInputSchema = z.object({
   fieldId: z.number().optional().describe("Custom field ID (e.g. 395 for MCP Tool)."),
   fieldName: z
     .string()
@@ -9,18 +10,92 @@ export const customFieldInputSchema = z.object({
   value: z.string().describe("Value to write into the custom field."),
 });
 
-export type CustomFieldInput = z.infer<typeof customFieldInputSchema>;
+/**
+ * Mantis REST shape agents often paste by mistake:
+ * { field: { id, name }, value }
+ */
+export const customFieldRestInputSchema = z.object({
+  field: z.object({
+    id: z.number().optional(),
+    name: z.string().optional(),
+  }),
+  value: z.string().describe("Value to write into the custom field."),
+});
 
-export const customFieldsParamSchema = customFieldInputSchema
-  .array()
+export const customFieldInputSchema = z.union([
+  customFieldMcpInputSchema,
+  customFieldRestInputSchema,
+]);
+
+export type CustomFieldMcpInput = z.infer<typeof customFieldMcpInputSchema>;
+export type CustomFieldInput = CustomFieldMcpInput;
+
+const customFieldsArrayDescription =
+  "Custom fields to set. Accepts MCP shape [{ fieldId|fieldName, value }] " +
+  'or Mantis REST shape [{ field: { id|name }, value }]. ' +
+  'Example: [{ "fieldName": "MCP Tool", "value": "user-blender" }].';
+
+export const customFieldsParamSchema = z
+  .array(customFieldInputSchema)
+  .optional()
+  .describe(customFieldsArrayDescription);
+
+/** Alias of customFields — same array, snake_case key matching Mantis REST. */
+export const customFieldsSnakeParamSchema = z
+  .array(customFieldInputSchema)
   .optional()
   .describe(
-    "Custom fields to set. Each item must include fieldId or fieldName (or both). " +
-      'Example: [{ "fieldName": "MCP Tool", "value": "user-blender" }].'
+    "Alias of customFields (same meaning). Prefer either key; both are accepted. " +
+      customFieldsArrayDescription
   );
 
+export function normalizeCustomFieldEntry(
+  entry: z.infer<typeof customFieldInputSchema>,
+  index: number
+): CustomFieldMcpInput {
+  if ("field" in entry) {
+    const fieldId = entry.field.id;
+    const fieldName = entry.field.name?.trim();
+    if (fieldId === undefined && !fieldName) {
+      throw new Error(
+        `custom_fields[${index}] requires field.id or field.name (or use fieldId / fieldName).`
+      );
+    }
+    return {
+      fieldId,
+      fieldName: fieldName || undefined,
+      value: entry.value,
+    };
+  }
+
+  const fieldName = entry.fieldName?.trim();
+  if (entry.fieldId === undefined && !fieldName) {
+    throw new Error(`customFields[${index}] requires fieldId or fieldName.`);
+  }
+  return {
+    fieldId: entry.fieldId,
+    fieldName: fieldName || undefined,
+    value: entry.value,
+  };
+}
+
+/**
+ * Resolve custom field list from either customFields or custom_fields.
+ * If both are present, they are concatenated (customFields first).
+ */
+export function resolveCustomFieldsParam(params: {
+  customFields?: z.infer<typeof customFieldInputSchema>[];
+  custom_fields?: z.infer<typeof customFieldInputSchema>[];
+}): CustomFieldMcpInput[] | undefined {
+  const combined = [...(params.customFields ?? []), ...(params.custom_fields ?? [])];
+  if (!combined.length) {
+    return undefined;
+  }
+  return combined.map((entry, index) => normalizeCustomFieldEntry(entry, index));
+}
+
 export function buildCustomFieldsPayload(
-  fields: CustomFieldInput[]
+  fields: CustomFieldMcpInput[]
 ): { custom_fields: Array<{ field: { id?: number; name?: string }; value: string }> } {
   if (!fields.length) {
     throw new Error("customFields must include at least one entry.");
@@ -48,7 +123,7 @@ export function buildCustomFieldsPayload(
 
 export function mergeCustomFieldsIntoPayload(
   payload: Record<string, unknown>,
-  fields?: CustomFieldInput[]
+  fields?: CustomFieldMcpInput[]
 ): void {
   if (!fields?.length) {
     return;

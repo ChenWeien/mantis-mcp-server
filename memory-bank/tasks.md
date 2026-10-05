@@ -1,6 +1,11 @@
 # 任務追蹤
 
 ## 進行中的任務
+- [X] create_issue / update_issue 同時接受 customFields 與 custom_fields
+  - [X] Zod schema 加入 custom_fields 別名
+  - [X] 接受 MCP 與 REST 兩種陣列元素形狀並正規化
+  - [X] 更新 README / CHANGELOG
+  - [X] 編譯驗證
 - [X] update_issue 支援 version_id 加入 / 移出 roadmap (target version)
   - [X] 在 update_issue 新增 versionId、versionAction 參數
   - [X] PATCH target_version：add 設 versionId，remove 在比對後清空
@@ -50,10 +55,11 @@
 - [X] 添加使用說明文檔
 
 ## 已完成的任務
+- [X] create_issue / update_issue 同時接受 customFields 與 custom_fields - Completed on 2026-10-02
 - [X] update_issue 支援 version_id 加入 / 移出 roadmap (target version) - Completed on 2026-09-21
 - [X] 初始化專案結構和文件
 - [X] 設計系統架構
 - [X] 實作 Mantis API 整合
 - [X] 實作問題查詢功能
 - [X] 實作認證機制
-- [X] 實作統計功能 
+- [X] 實作統計功能
